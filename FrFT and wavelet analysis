@@ -1,0 +1,201 @@
+clc; clear; close all;
+
+%% --- 1. Simulate Abdominal ECG Signal ---
+
+fs = 40; t = 0:1/fs:10; L = length(t);
+
+maternal_rr = round(fs / 0.9);
+
+maternal_ecg = zeros(size(t));
+
+for i = 1:maternal_rr:length(t)-5
+
+   idx = round(i);
+
+   maternal_ecg(idx:min(idx+1, L)) = -50;
+
+end
+
+fetal_rr = round(fs / 1.8);
+
+fetal_ecg = zeros(size(t));
+
+for i = 1:fetal_rr:length(t)-3
+
+   idx = round(i);
+
+   fetal_ecg(idx:min(idx+1, L)) = -10;
+
+end
+
+baseline = 2 * sin(2 * pi * 0.2 * t);
+
+noise = 2 * randn(size(t));
+
+abdominal_ecg = maternal_ecg + fetal_ecg + baseline + noise;
+
+%% --- 2. Bandpass Filter 0.5–15 Hz ---
+
+[b, a] = butter(3, [0.5 15] / (fs/2), 'bandpass');
+
+ecg_filtered = filtfilt(b, a, abdominal_ecg);
+
+%% --- 3. Trim Transient ---
+
+trim_start = round(1 * fs);
+
+t_trimmed = t(trim_start+1:end);
+
+ecg_trimmed = ecg_filtered(trim_start+1:end);
+
+%% --- 4. Normalize ---
+
+ecg_normalized = ecg_trimmed / max(abs(ecg_trimmed));
+
+%% --- 5. Plot Raw Abdominal ECG ---
+
+figure;
+
+plot(t, abdominal_ecg, 'k');
+
+title('(a) Abdominal ECG before preprocessing and normalization');
+
+xlabel('Time (sec)'); ylabel('Amplitude (mV)');
+
+xlim([0 10]); ylim([-100 100]); grid on;
+
+%% --- 6. Plot Preprocessed ECG ---
+
+figure;
+
+plot(t_trimmed, ecg_normalized, 'b');
+
+title('(b) Abdominal ECG after preprocessing and normalization');
+
+xlabel('Time (sec)'); ylabel('Normalized Amplitude (NU)');
+
+xlim([0 10]); ylim([-1 1]); grid on;
+
+%% --- 7. FrFT ---
+
+a = 0.001;
+
+frft_result = frft(ecg_normalized, a);
+
+frft_abs = abs(frft_result);
+
+frft_abs_norm = frft_abs / max(frft_abs);
+
+%% --- 8. Maternal Peak Detection ---
+
+threshold = 0.27;
+
+[~, locs] = findpeaks(frft_abs_norm, ...
+
+   'MinPeakHeight', threshold, ...
+
+   'MinPeakDistance', round(0.3 * fs));
+
+if t_trimmed(end) - t_trimmed(locs(end)) > 0.5
+
+   [~, idx_last] = max(frft_abs_norm(end-3:end));
+
+   locs(end+1) = length(frft_abs_norm) - 3 + idx_last;
+
+end
+
+%% --- 9. Plot FrFT Spectrum ---
+
+figure;
+
+plot(t_trimmed, frft_abs_norm, 'b');
+
+title('(c) FrFT of abdominal ECG');
+
+xlabel('Time (sec)'); ylabel('Normalized Amplitude (NU)');
+
+xlim([0 10]); ylim([0 1]); grid on;
+
+%% --- 10. Plot with Maternal Peaks ---
+
+figure;
+
+plot(t_trimmed, frft_abs_norm, 'b'); hold on;
+
+valid_locs = locs(locs <= length(t_trimmed));
+
+plot(t_trimmed(valid_locs), frft_abs_norm(valid_locs), 'ro', 'MarkerFaceColor', 'r');
+
+title('(d) FrFT with all maternal peaks marked');
+
+xlabel('Time (sec)'); ylabel('Normalized Amplitude (NU)');
+
+legend('FrFT Spectrum', 'Maternal Peaks');
+
+xlim([0 10]); ylim([0 1]); grid on;
+
+%% --- 11. Estimate Maternal ECG Component ---
+
+maternal_est = zeros(size(ecg_normalized));
+
+for i = 1:length(valid_locs)
+
+   maternal_est(valid_locs(i)) = frft_abs_norm(valid_locs(i));
+
+end
+
+maternal_est = smooth(maternal_est, 10);
+
+maternal_est = maternal_est';
+
+%% --- 12. Subtract Maternal to Get Residual ---
+
+residual_ecg = ecg_normalized - maternal_est;
+
+%% --- 13. Plot Residual ECG vs Normalized ECG ---
+
+figure;
+
+subplot(2,1,1);
+
+plot(t_trimmed, residual_ecg, 'b'); hold on;
+
+plot(t_trimmed, ecg_normalized, 'r--');
+
+title('(e) Residual abdominal ECG after elimination of maternal ECG');
+
+xlabel('Time (sec)'); ylabel('Normalised amplitude (NU)');
+
+legend('Residual ECG', 'Original ECG');
+
+xlim([0 10]); ylim([-1 1]); grid on;
+
+%% --- 14. Wavelet Denoising for Fetal ECG ---
+
+fecg_denoised = wden(residual_ecg, 'rigrsure', 's', 'mln', 5, 'db6');
+
+%% --- 15. Fetal Peak Detection with Adjustable Threshold ---
+
+fetal_threshold = 0.4;
+
+[~, fetal_locs] = findpeaks(fecg_denoised, ...
+
+   'MinPeakDistance', round(0.3 * fs), ...
+
+   'MinPeakHeight', fetal_threshold * max(fecg_denoised));
+
+%% --- 16. Plot Fetal ECG with Peaks ---
+
+subplot(2,1,2);
+
+plot(t_trimmed, fecg_denoised, 'b'); hold on;
+
+plot(t_trimmed(fetal_locs), fecg_denoised(fetal_locs), 'ro', 'MarkerFaceColor', 'r');
+
+title('(f) Estimated FECG using wavelet analysis with fetal peaks marked');
+
+xlabel('Time (sec)'); ylabel('Normalised amplitude (NU)');
+
+legend('Estimated FECG', 'Fetal Peaks');
+
+xlim([0 10]); ylim([-2.5 1]); grid on;
