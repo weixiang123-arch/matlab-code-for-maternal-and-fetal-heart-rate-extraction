@@ -1,0 +1,65 @@
+clc; clear; close all;
+
+% Parameters
+
+fs = 40;                
+
+t = 0:1/fs:10;          
+
+L = length(t);
+
+% Maternal ECG (~0.9 Hz), strong spikes
+
+maternal_rr = round(fs / 0.9);
+
+maternal_ecg = zeros(size(t));
+
+for i = 1:maternal_rr:length(t)-5
+
+   idx = round(i);
+
+   maternal_ecg(idx:min(idx+1, L)) = -50;
+
+end
+
+% Fetal ECG (~1.8 Hz), weaker spikes
+
+fetal_rr = round(fs / 1.8);
+
+fetal_ecg = zeros(size(t));
+
+for i = 1:fetal_rr:length(t)-3
+
+   idx = round(i);
+
+   fetal_ecg(idx:min(idx+1, L)) = -10;
+
+end
+
+% Baseline and noise
+
+baseline = 2 * sin(2 * pi * 0.2 * t);
+
+noise = 2 * randn(size(t));
+
+% Abdominal ECG signal
+
+abdominal_ecg = maternal_ecg + fetal_ecg + baseline + noise;
+
+% Plot Time-Domain Abdominal ECG
+
+figure;
+
+plot(t, abdominal_ecg, 'k');
+
+xlabel('Time (s)');
+
+ylabel('Amplitude (mV)');
+
+title('Simulated Abdominal ECG');
+
+xlim([0 10]);
+
+ylim([-120 60]);
+
+grid off;
