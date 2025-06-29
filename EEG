@@ -1,0 +1,63 @@
+clc; clear; close all;
+
+%% a) Application: Simulate EEG mental task analysis
+
+fs = 200;                % Sampling frequency in Hz
+
+t = 0:1/fs:10;           % 10 seconds duration
+
+%% b) Simulate EEG-like signals for different mental tasks
+
+baseline = sin(2*pi*10*t) + 0.5*randn(size(t));   % Alpha-dominant
+
+math     = sin(2*pi*20*t) + 0.5*randn(size(t));   % Beta-dominant
+
+color    = sin(2*pi*25*t) + 0.5*randn(size(t));   % High-beta
+
+chinese  = sin(2*pi*8*t)  + 0.5*randn(size(t));   % Alpha-theta
+
+figure;
+
+subplot(4,1,1); plot(t, baseline);
+
+title('Baseline EEG'); xlabel('Time (s)'); ylabel('Amplitude');
+
+subplot(4,1,2); plot(t, math);
+
+title('Math Task EEG'); xlabel('Time (s)'); ylabel('Amplitude');
+
+subplot(4,1,3); plot(t, color);
+
+title('Color Task EEG'); xlabel('Time (s)'); ylabel('Amplitude');
+
+subplot(4,1,4); plot(t, chinese);
+
+title('Chinese Phrase Task EEG'); xlabel('Time (s)'); ylabel('Amplitude');
+
+%% d) Spectral Analysis using Welch's Method
+
+[Pb,f]  = pwelch(baseline,[],[],[],fs);
+
+[Pm,~]  = pwelch(math,[],[],[],fs);
+
+[Pc,~]  = pwelch(color,[],[],[],fs);
+
+[Pch,~] = pwelch(chinese,[],[],[],fs);
+
+figure;
+
+subplot(2,2,1); semilogy(f, Pb);
+
+title('PSD - Baseline'); xlabel('Frequency (Hz)'); ylabel('Power/Frequency (dB/Hz)');
+
+subplot(2,2,2); semilogy(f, Pm);
+
+title('PSD - Math Task'); xlabel('Frequency (Hz)'); ylabel('Power/Frequency (dB/Hz)');
+
+subplot(2,2,3); semilogy(f, Pc);
+
+title('PSD - Color Task'); xlabel('Frequency (Hz)'); ylabel('Power/Frequency (dB/Hz)');
+
+subplot(2,2,4); semilogy(f, Pch);
+
+title('PSD - Chinese Task'); xlabel('Frequency (Hz)'); ylabel('Power/Frequency (dB/Hz)');
